@@ -1,38 +1,63 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
-import networkx as nx
 from io import StringIO
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/process_data")
 async def process_data(data: dict):
     try:
         csv_data = data.get("data")
-        print("Recebido CSV:\n", csv_data)
+        print("Recebido CSV:\n", csv_data[:100] + "..." if len(csv_data) > 100 else csv_data)
 
-        df = pd.read_csv(StringIO(csv_data))
-        print("DataFrame carregado:\n", df.head())
+        separadores_possiveis = [',', ';', '\t']
+        df = None
+        for sep in separadores_possiveis:
+            try:
+                df = pd.read_csv(StringIO(csv_data), sep=sep, skipinitialspace=True)
+                print(f"CSV lido com separador: '{sep}'")
+                break
+            except pd.errors.ParserError:
+                print(f"Erro ao ler com separador: '{sep}'")
+                continue
 
-        G = nx.Graph()
+        if df is None:
+            return JSONResponse(content={"error": "Não foi possível determinar o formato do CSV."}, status_code=400)
 
-        for _, row in df.iterrows():
-            G.add_node(row['ID'], name=row['Nome'])
-            adjacentes = row['Adjacentes'].split(';') if pd.notna(row['Adjacentes']) else []
-            for adj in adjacentes:
-                G.add_edge(row['ID'], adj)
+        print("Cabeçalho do DataFrame carregado:\n", df.head())
 
-        graph_data = {
-            "nodes": [{"id": str(n)} for n in G.nodes()],
-            "links": [{"source": str(s), "target": str(t)} for s, t in G.edges()]
+        if 'Freguesia' not in df.columns or 'Municipio' not in df.columns or 'Shape_Area' not in df.columns:
+            return JSONResponse(
+                content={"error": "O ficheiro CSV deve conter as colunas 'Freguesia', 'Municipio' e 'Shape_Area'."},
+                status_code=400,
+            )
+
+        # Group by Freguesia and Municipio and sum Shape_Area
+        grouped_data = df.groupby(['Freguesia', 'Municipio'])['Shape_Area'].sum().reset_index()
+
+        # Prepare data for Plotly 3D bar chart
+        bar_data = {
+            'x': grouped_data['Freguesia'].tolist(),
+            'y': grouped_data['Municipio'].tolist(),
+            'z': grouped_data['Shape_Area'].tolist(),
+            'type': 'bar3d'
         }
 
-        print("Grafo criado com sucesso!")
-        return JSONResponse(content=graph_data)
+        print("Dados para gráfico de barras 3D criados com sucesso!")
+        return JSONResponse(content=bar_data)
 
     except Exception as e:
-        print("Erro no processamento:", e)
+        print("Erro genérico no processamento:", e)
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 if __name__ == "__main__":
