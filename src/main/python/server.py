@@ -25,10 +25,8 @@ async def process_data(data: dict):
         for sep in separadores_possiveis:
             try:
                 df = pd.read_csv(StringIO(csv_data), sep=sep, skipinitialspace=True)
-                print(f"CSV lido com separador: '{sep}'")
                 break
             except pd.errors.ParserError:
-                print(f"Erro ao ler com separador: '{sep}'")
                 continue
 
         if df is None:
