@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualização 3D de Dados CSV</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <title>Visualização de Dados CSV</title>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 </head>
 <body>
-    <h1>Visualização 3D de Dados CSV</h1>
+    <h1>Visualização de Propriedades Rústicas</h1>
     <input type="file" id="fileInput" accept=".csv">
-    <button onclick="processFile()">Gerar Gráfico de Barras 3D</button>
+    <button onclick="processFile()">Gerar Gráfico 2D</button>
     <div id="myDiv" style="width: 700px; height: 500px;"></div>
 
     <script>
@@ -27,6 +26,7 @@
                 const csvData = event.target.result;
                 console.log("CSV Lido:", csvData);
 
+                // Envia os dados CSV para a API FastAPI
                 fetch('http://127.0.0.1:8000/process_data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -34,22 +34,15 @@
                 })
                 .then(response => response.json())
                 .then(barData => {
-                    console.log("Dados para gráfico de barras 3D recebidos:", barData);
-                    if (barData && barData.x && barData.y && barData.z && barData.type === 'bar3d') {
-                        var data = [barData];
-                        var layout = {
-                            scene: {
-                                xaxis: { title: 'Freguesia' },
-                                yaxis: { title: 'Municipio' },
-                                zaxis: { title: 'Soma de Shape_Area' },
-                                aspectratio: { x: 1, y: 1, z: 0.8 }
-                            },
-                            title: 'Soma da Área por Freguesia e Município'
-                        };
-                        Plotly.newPlot('myDiv', data, layout);
+                    console.log("Dados para gráfico recebidos:", barData);
+
+                    // Verifica se os dados retornados contêm o gráfico em HTML
+                    if (barData && barData.graph) {
+                        // Insere o gráfico retornado no div
+                        document.getElementById('myDiv').innerHTML = barData.graph;
                     } else {
-                        console.error("Dados de resposta inválidos para gráfico de barras 3D:", barData);
-                        alert("Erro: Dados inválidos para gerar o gráfico de barras 3D.");
+                        console.error("Dados inválidos para o gráfico:", barData);
+                        alert("Erro: Não foi possível gerar o gráfico.");
                     }
                 })
                 .catch(error => console.error('Erro ao processar o ficheiro:', error));
