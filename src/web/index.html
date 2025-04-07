@@ -1,19 +1,30 @@
 <!DOCTYPE html>
 <html lang="pt">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualização de Dados CSV</title>
+    <title>Visualização de Conexões de Propriedades</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style type="text/css">
+        #mynetwork {
+            width: 700px;
+            height: 500px;
+            border: 1px solid lightgray;
+        }
+    </style>
 </head>
+
 <body>
-    <h1>Visualização de Propriedades Rústicas</h1>
+    <h1>Visualização de Conexões de Propriedades</h1>
     <input type="file" id="fileInput" accept=".csv">
-    <button onclick="processFile()">Gerar Gráfico 2D</button>
-    <div id="myDiv" style="width: 700px; height: 500px;"></div>
+    <button onclick="processFile()">Gerar Grafo de Propriedades</button>
+    <div id="mynetwork"></div>
 
     <script>
-        function processFile() {
+     function processFile() {
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
             if (!file) {
@@ -22,27 +33,35 @@
             }
 
             const reader = new FileReader();
-            reader.onload = function(event) {
+            reader.onload = function (event) {
                 const csvData = event.target.result;
                 console.log("CSV Lido:", csvData);
 
-                // Envia os dados CSV para a API FastAPI
-                fetch('http://127.0.0.1:8000/process_data', {
+                const testLimit = 50; // Set a limit for testing (e.g., 50 nodes/edges)
+                const fetchUrl = `http://127.0.0.1:8000/process_graph?limit=${testLimit}`;
+
+                fetch(fetchUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ data: csvData })
                 })
                 .then(response => response.json())
-                .then(barData => {
-                    console.log("Dados para gráfico recebidos:", barData);
-
-                    // Verifica se os dados retornados contêm o gráfico em HTML
-                    if (barData && barData.graph) {
-                        // Insere o gráfico retornado no div
-                        document.getElementById('myDiv').innerHTML = barData.graph;
+                .then(graphData => {
+                    console.log("Dados do grafo recebidos:", graphData);
+                    if (graphData && graphData.nodes && graphData.edges) {
+                        const nodes = new vis.DataSet(graphData.nodes);
+                        const edges = new vis.DataSet(graphData.edges);
+                        const data = { nodes: nodes, edges: edges };
+                        const options = {
+                            physics: {
+                                enabled: false
+                            }
+                        };
+                        const container = document.getElementById('mynetwork');
+                        const network = new vis.Network(container, data, options);
                     } else {
-                        console.error("Dados inválidos para o gráfico:", barData);
-                        alert("Erro: Não foi possível gerar o gráfico.");
+                        console.error("Dados de resposta inválidos para o grafo:", graphData);
+                        alert("Erro: Dados inválidos para gerar o grafo de propriedades.");
                     }
                 })
                 .catch(error => console.error('Erro ao processar o ficheiro:', error));
@@ -51,4 +70,5 @@
         }
     </script>
 </body>
+
 </html>
