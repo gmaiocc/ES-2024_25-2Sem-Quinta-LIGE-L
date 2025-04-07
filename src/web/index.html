@@ -24,7 +24,7 @@
     <div id="mynetwork"></div>
 
     <script>
-     function processFile() {
+        function processFile() {
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
             if (!file) {
@@ -54,7 +54,28 @@
                         const data = { nodes: nodes, edges: edges };
                         const options = {
                             physics: {
-                                enabled: false
+                                enabled: true,
+                                barnesHut: {
+                                    gravitationalConstant: -2000,
+                                    centralGravity: 0.2,
+                                    springLength: 95,
+                                    springConstant: 0.04,
+                                    damping: 0.09,
+                                    avoidOverlap: 1
+                                },
+                                solver: 'barnesHut',
+                                stabilization: {
+                                    iterations: 1000,
+                                    updateInterval: 100,
+                                    onlyDynamicEdges: false,
+                                    fit: true
+                                }
+                            },
+                            layout: {
+                                improvedLayout: true
+                            },
+                            nodes: {
+                                size: 10
                             }
                         };
                         const container = document.getElementById('mynetwork');
