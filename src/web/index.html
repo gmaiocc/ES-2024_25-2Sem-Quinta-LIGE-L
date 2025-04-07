@@ -2,60 +2,90 @@
 <html lang="pt">
 
 <head>
+    <!-- Definição do conjunto de caracteres para o documento -->
     <meta charset="UTF-8">
+
+    <!-- Define como o conteúdo será visualizado em dispositivos móveis (responsivo) -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Título da página -->
     <title>Visualização de Conexões de Propriedades</title>
+
+    <!-- Inclusão da biblioteca D3.js para manipulação de dados e gráficos -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <!-- Inclusão da biblioteca Plotly para gráficos interativos -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Inclusão da biblioteca vis-network para criação de redes de nós e arestas -->
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+    <!-- Estilos CSS para a rede -->
     <style type="text/css">
         #mynetwork {
-            width: 700px;
-            height: 500px;
-            border: 1px solid lightgray;
+            width: 700px; /* Largura da área onde o grafo será exibido */
+            height: 500px; /* Altura da área onde o grafo será exibido */
+            border: 1px solid lightgray; /* Borda de cor cinza claro */
         }
     </style>
 </head>
 
 <body>
+    <!-- Título principal da página -->
     <h1>Visualização de Conexões de Propriedades</h1>
+
+    <!-- Input para seleção de ficheiro CSV -->
     <input type="file" id="fileInput" accept=".csv">
+
+    <!-- Botão para acionar a geração do grafo -->
     <button onclick="processFile()">Gerar Grafo de Propriedades</button>
+
+    <!-- Contêiner onde o grafo será renderizado -->
     <div id="mynetwork"></div>
 
+    <!-- Script que processa o ficheiro CSV e gera o grafo -->
     <script>
+        // Função que processa o ficheiro CSV quando o botão é clicado
         function processFile() {
+            // Obtém o elemento de input de ficheiro
             const fileInput = document.getElementById('fileInput');
-            const file = fileInput.files[0];
+            const file = fileInput.files[0]; // Obtém o primeiro ficheiro selecionado
             if (!file) {
                 alert("Por favor, selecione um ficheiro CSV.");
-                return;
+                return; // Se não houver ficheiro, exibe alerta e retorna
             }
 
+            // Cria um leitor de ficheiros
             const reader = new FileReader();
             reader.onload = function (event) {
-                const csvData = event.target.result;
-                console.log("CSV Lido:", csvData);
+                const csvData = event.target.result; // Obtém os dados lidos do ficheiro CSV
+                console.log("CSV Lido:", csvData); // Exibe os dados CSV no console
 
-                const testLimit = 50; // Set a limit for testing (e.g., 50 nodes/edges)
+                const testLimit = 50; // Define um limite para testes (e.g., 50 nós/arestas)
+
+                // URL do servidor onde os dados CSV serão processados
                 const fetchUrl = `http://127.0.0.1:8000/process_graph?limit=${testLimit}`;
 
+                // Faz a requisição para o servidor passando os dados CSV
                 fetch(fetchUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ data: csvData })
+                    method: 'POST', // Método da requisição é POST
+                    headers: { 'Content-Type': 'application/json' }, // Cabeçalho para definir o tipo de conteúdo
+                    body: JSON.stringify({ data: csvData }) // Corpo da requisição com os dados CSV
                 })
-                .then(response => response.json())
+                .then(response => response.json()) // Converte a resposta em JSON
                 .then(graphData => {
-                    console.log("Dados do grafo recebidos:", graphData);
+                    console.log("Dados do grafo recebidos:", graphData); // Exibe os dados do grafo no console
                     if (graphData && graphData.nodes && graphData.edges) {
+                        // Se os dados do grafo são válidos, cria os conjuntos de nós e arestas
                         const nodes = new vis.DataSet(graphData.nodes);
                         const edges = new vis.DataSet(graphData.edges);
                         const data = { nodes: nodes, edges: edges };
+
+                        // Define as opções de configuração para o grafo (rede)
                         const options = {
                             physics: {
-                                enabled: true,
-                                barnesHut: {
+                                enabled: true, // Habilita a física na rede
+                                barnesHut: { // Configuração específica para o algoritmo Barnes-Hut
                                     gravitationalConstant: -2000,
                                     centralGravity: 0.2,
                                     springLength: 95,
@@ -63,31 +93,34 @@
                                     damping: 0.09,
                                     avoidOverlap: 1
                                 },
-                                solver: 'barnesHut',
+                                solver: 'barnesHut', // Define o algoritmo de solução da física
                                 stabilization: {
-                                    iterations: 1000,
-                                    updateInterval: 100,
+                                    iterations: 1000, // Número de iterações para estabilizar a rede
+                                    updateInterval: 100, // Intervalo de atualização da rede
                                     onlyDynamicEdges: false,
                                     fit: true
                                 }
                             },
                             layout: {
-                                improvedLayout: true
+                                improvedLayout: true // Melhoramento do layout da rede
                             },
                             nodes: {
-                                size: 10
+                                size: 10 // Define o tamanho dos nós
                             }
                         };
+
+                        // Cria a rede de nós e arestas no contêiner definido
                         const container = document.getElementById('mynetwork');
                         const network = new vis.Network(container, data, options);
                     } else {
+                        // Se os dados do grafo forem inválidos, exibe erro no console e alerta
                         console.error("Dados de resposta inválidos para o grafo:", graphData);
                         alert("Erro: Dados inválidos para gerar o grafo de propriedades.");
                     }
                 })
-                .catch(error => console.error('Erro ao processar o ficheiro:', error));
+                .catch(error => console.error('Erro ao processar o ficheiro:', error)); // Exibe erro em caso de falha na requisição
             };
-            reader.readAsText(file);
+            reader.readAsText(file); // Lê o ficheiro CSV como texto
         }
     </script>
 </body>
