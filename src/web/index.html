@@ -2,125 +2,210 @@
 <html lang="pt">
 
 <head>
-    <!-- Definição do conjunto de caracteres para o documento -->
-    <meta charset="UTF-8">
+    <meta charset="UTF-8"> <!-- Define o conjunto de caracteres como UTF-8 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Torna a página responsiva para dispositivos móveis -->
+    <title>Visualização de Cadastro de Propriedades e Proprietários</title> <!-- Título da página apresentado no separador do navegador -->
 
-    <!-- Define como o conteúdo será visualizado em dispositivos móveis (responsivo) -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <!-- Título da página -->
-    <title>Visualização de Conexões de Propriedades</title>
-
-    <!-- Inclusão da biblioteca D3.js para manipulação de dados e gráficos -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-
-    <!-- Inclusão da biblioteca Plotly para gráficos interativos -->
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-
-    <!-- Inclusão da biblioteca vis-network para criação de redes de nós e arestas -->
-    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-
-    <!-- Estilos CSS para a rede -->
-    <style type="text/css">
-        #mynetwork {
-            width: 700px; /* Largura da área onde o grafo será exibido */
-            height: 500px; /* Altura da área onde o grafo será exibido */
-            border: 1px solid lightgray; /* Borda de cor cinza claro */
-        }
-    </style>
+    <link rel="stylesheet" href="style.css"> <!-- Liga o ficheiro CSS externo para estilos -->
 </head>
 
 <body>
-    <!-- Título principal da página -->
-    <h1>Visualização de Conexões de Propriedades</h1>
+    <h1>ES-2024_25-2Sem-Quinta-LIGE-L</h1> <!-- Título principal da página -->
 
-    <!-- Input para seleção de ficheiro CSV -->
-    <input type="file" id="fileInput" accept=".csv">
+    <div class="controls">
+        <!-- Campo para carregar um ficheiro CSV -->
+        <input type="file" id="fileInput" accept=".csv">
+        <!-- Botão para gerar o grafo de propriedades (baseado na adjacência das propriedades) -->
+        <button onclick="processPropertiesGraph()">Criar Grafo de Propriedades</button>
+        <!-- Botão para gerar o grafo de proprietários (baseado na partilha de propriedades) -->
+        <button onclick="processOwnersGraph()">Criar Grafo de Proprietários</button>
+    </div>
 
-    <!-- Botão para acionar a geração do grafo -->
-    <button onclick="processFile()">Gerar Grafo de Propriedades</button>
+    <h2>Grafo de Propriedades (Arestas por Adjacência Geométrica)</h2>
+    <div class="container">
+        <!-- Div onde será renderizado o grafo das propriedades -->
+        <div id="propertiesNetwork"></div>
+        <!-- Div onde serão mostrados os detalhes de uma propriedade selecionada -->
+        <div id="propertyInfo">
+            <h3>Detalhes da Propriedade</h3>
+            <p>Clique num nó para ver os detalhes.</p>
+        </div>
+    </div>
 
-    <!-- Contêiner onde o grafo será renderizado -->
-    <div id="mynetwork"></div>
+    <h2>Grafo de Proprietários (Arestas por Propriedade Partilhada)</h2>
+    <!-- Div onde será renderizado o grafo dos proprietários -->
+    <div id="ownersNetwork"></div>
 
-    <!-- Script que processa o ficheiro CSV e gera o grafo -->
+    <!-- Importação de bibliotecas externas utilizadas para visualização -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
     <script>
-        // Função que processa o ficheiro CSV quando o botão é clicado
-        function processFile() {
-            // Obtém o elemento de input de ficheiro
-            const fileInput = document.getElementById('fileInput');
-            const file = fileInput.files[0]; // Obtém o primeiro ficheiro selecionado
-            if (!file) {
-                alert("Por favor, selecione um ficheiro CSV.");
-                return; // Se não houver ficheiro, exibe alerta e retorna
+        // Função que desenha um grafo numa determinada div com os dados fornecidos
+        function drawGraph(containerId, graphData) {
+            if (graphData && graphData.nodes && graphData.edges) {
+                const nodes = new vis.DataSet(graphData.nodes); // Cria um conjunto de nós
+                const edges = new vis.DataSet(graphData.edges); // Cria um conjunto de arestas
+                const data = { nodes, edges }; // Junta os nós e as arestas
+                const container = document.getElementById(containerId); // Obtém o elemento HTML onde o grafo será desenhado
+
+                // Opções de configuração do grafo
+                const options = {
+                    physics: {
+                        enabled: false // Desativa a física (movimento automático dos nós)
+                    },
+                    layout: {
+                        improvedLayout: true,
+                        hierarchical: false // Layout livre (não hierárquico)
+                    },
+                    nodes: {
+                        size: 10, // Tamanho dos nós
+                        shape: 'ellipse', // Forma dos nós
+                        color: '#3498db' // Cor azul para os nós
+                    },
+                    edges: {
+                        color: '#000000', // Cor preta para as arestas
+                        width: 0.5, // Espessura base das arestas
+                        smooth: {
+                            type: 'continuous' // Curvatura suave das arestas
+                        },
+                        hoverWidth: 1.5, // Aresta fica mais grossa ao passar o rato
+                        hoverColor: 'rgba(255,0,0,0.5)' // Cor vermelha translúcida no hover
+                    },
+                    interaction: {
+                        hover: true, // Permite interação ao passar o rato
+                        select: true // Permite seleção de nós
+                    }
+                };
+
+                // Cria o grafo com os dados e opções configurados
+                const network = new vis.Network(container, data, options);
+
+                // Evento: quando se passa o rato sobre um nó, destaca as arestas ligadas
+                network.on("hoverNode", function (params) {
+                    const nodeId = params.node;
+                    const connectedEdgesIds = network.getConnectedEdges(nodeId);
+                    network.selectEdges(connectedEdgesIds); // Destaca arestas conectadas
+                });
+
+                // Evento: quando se remove o foco do nó, retira o destaque das arestas
+                network.on("blurNode", function (params) {
+                    network.unselectAllEdges();
+                });
+
+                // Evento: ao clicar num nó no grafo de propriedades, mostra os detalhes
+                if (containerId === 'propertiesNetwork') {
+                    network.on("click", function (params) {
+                        if (params.nodes.length === 1) {
+                            const nodeId = params.nodes[0];
+                            fetchPropertyDetails(nodeId); // Vai buscar os detalhes via API
+                        }
+                    });
+                }
+            } else {
+                // Caso os dados do grafo estejam mal formados
+                console.error(`Dados inválidos para o grafo ${containerId}:`, graphData);
+                alert(`Erro ao gerar o grafo ${containerId.replace('Network', '').toLowerCase()}.`);
             }
+        }
 
-            // Cria um leitor de ficheiros
-            const reader = new FileReader();
-            reader.onload = function (event) {
-                const csvData = event.target.result; // Obtém os dados lidos do ficheiro CSV
-                console.log("CSV Lido:", csvData); // Exibe os dados CSV no console
-
-                const testLimit = 50; // Define um limite para testes (e.g., 50 nós/arestas)
-
-                // URL do servidor onde os dados CSV serão processados
-                const fetchUrl = `http://127.0.0.1:8000/process_graph?limit=${testLimit}`;
-
-                // Faz a requisição para o servidor passando os dados CSV
-                fetch(fetchUrl, {
-                    method: 'POST', // Método da requisição é POST
-                    headers: { 'Content-Type': 'application/json' }, // Cabeçalho para definir o tipo de conteúdo
-                    body: JSON.stringify({ data: csvData }) // Corpo da requisição com os dados CSV
-                })
-                .then(response => response.json()) // Converte a resposta em JSON
-                .then(graphData => {
-                    console.log("Dados do grafo recebidos:", graphData); // Exibe os dados do grafo no console
-                    if (graphData && graphData.nodes && graphData.edges) {
-                        // Se os dados do grafo são válidos, cria os conjuntos de nós e arestas
-                        const nodes = new vis.DataSet(graphData.nodes);
-                        const edges = new vis.DataSet(graphData.edges);
-                        const data = { nodes: nodes, edges: edges };
-
-                        // Define as opções de configuração para o grafo (rede)
-                        const options = {
-                            physics: {
-                                enabled: true, // Habilita a física na rede
-                                barnesHut: { // Configuração específica para o algoritmo Barnes-Hut
-                                    gravitationalConstant: -2000,
-                                    centralGravity: 0.2,
-                                    springLength: 95,
-                                    springConstant: 0.04,
-                                    damping: 0.09,
-                                    avoidOverlap: 1
-                                },
-                                solver: 'barnesHut', // Define o algoritmo de solução da física
-                                stabilization: {
-                                    iterations: 1000, // Número de iterações para estabilizar a rede
-                                    updateInterval: 100, // Intervalo de atualização da rede
-                                    onlyDynamicEdges: false,
-                                    fit: true
-                                }
-                            },
-                            layout: {
-                                improvedLayout: true // Melhoramento do layout da rede
-                            },
-                            nodes: {
-                                size: 10 // Define o tamanho dos nós
-                            }
-                        };
-
-                        // Cria a rede de nós e arestas no contêiner definido
-                        const container = document.getElementById('mynetwork');
-                        const network = new vis.Network(container, data, options);
+        // Função para obter detalhes de uma propriedade a partir do servidor
+        function fetchPropertyDetails(propertyId) {
+            fetch(`http://127.0.0.1:8000/properties/${propertyId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const propertyInfoDiv = document.getElementById('propertyInfo');
+                    if (data.error) {
+                        propertyInfoDiv.innerHTML = `<h3>Detalhes da Propriedade</h3><p>Erro ao buscar detalhes: ${data.error}</p>`;
                     } else {
-                        // Se os dados do grafo forem inválidos, exibe erro no console e alerta
-                        console.error("Dados de resposta inválidos para o grafo:", graphData);
-                        alert("Erro: Dados inválidos para gerar o grafo de propriedades.");
+                        let adjacentList = data.adjacent_properties.length > 0 ? data.adjacent_properties.join(', ') : 'Nenhuma';
+                        propertyInfoDiv.innerHTML = `
+                            <h3>Detalhes da Propriedade</h3>
+                            <p><strong>ID:</strong> ${data.id}</p>
+                            <p><strong>Proprietário:</strong> ${data.owner || 'Não disponível'}</p>
+                            <p><strong>Freguesia:</strong> ${data.freguesia || 'Não disponível'}</p>
+                            <p><strong>Propriedades Adjacentes:</strong> ${adjacentList}</p>
+                        `;
                     }
                 })
-                .catch(error => console.error('Erro ao processar o ficheiro:', error)); // Exibe erro em caso de falha na requisição
+                .catch(error => {
+                    const propertyInfoDiv = document.getElementById('propertyInfo');
+                    propertyInfoDiv.innerHTML = `<h3>Detalhes da Propriedade</h3><p>Erro ao comunicar com o servidor.</p>`;
+                    console.error("Erro ao buscar detalhes da propriedade:", error);
+                });
+        }
+
+        // Função para processar o ficheiro CSV e gerar o grafo de propriedades
+        function processPropertiesGraph() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert("Por favor, selecione um ficheiro CSV.");
+                return;
+            }
+
+            const reader = new FileReader();
+
+            // Quando a leitura do ficheiro estiver concluída
+            reader.onload = function (event) {
+                const csvData = event.target.result;
+                const testLimit = 50; // Número máximo de registos a processar
+
+                // Envia os dados para o servidor via POST
+                fetch(`http://127.0.0.1:8000/process_properties_graph?limit=${testLimit}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ data: csvData })
+                })
+                .then(response => response.json())
+                .then(drawGraph.bind(null, 'propertiesNetwork')) // Chama a função para desenhar o grafo
+                .catch(error => {
+                    console.error('Erro ao processar o ficheiro para o grafo de propriedades:', error);
+                    alert("Erro ao comunicar com o servidor para o grafo de propriedades.");
+                });
             };
-            reader.readAsText(file); // Lê o ficheiro CSV como texto
+
+            reader.readAsText(file); // Lê o conteúdo do ficheiro como texto
+        }
+
+        // Função para processar o ficheiro CSV e gerar o grafo de proprietários
+        function processOwnersGraph() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert("Por favor, selecione um ficheiro CSV.");
+                return;
+            }
+
+            const reader = new FileReader();
+
+            // Quando a leitura do ficheiro estiver concluída
+            reader.onload = function (event) {
+                const csvData = event.target.result;
+                const testLimit = 50;
+
+                // Envia os dados para o servidor via POST
+                fetch(`http://127.0.0.1:8000/process_owners_graph?limit=${testLimit}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ data: csvData })
+                })
+                .then(response => response.json())
+                .then(drawGraph.bind(null, 'ownersNetwork')) // Chama a função para desenhar o grafo
+                .catch(error => {
+                    console.error('Erro ao processar o ficheiro para o grafo de proprietários:', error);
+                    alert("Erro ao comunicar com o servidor para o grafo de proprietários.");
+                });
+            };
+
+            reader.readAsText(file); // Lê o conteúdo do ficheiro como texto
         }
     </script>
 </body>

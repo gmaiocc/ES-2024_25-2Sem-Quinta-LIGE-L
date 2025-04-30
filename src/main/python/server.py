@@ -1,3 +1,5 @@
+# Importações necessárias
+from functools import partial
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -5,129 +7,204 @@ import pandas as pd
 from io import StringIO
 from collections import defaultdict
 from typing import Optional
+from shapely.wkt import loads
+from shapely.geometry import Polygon
+from shapely.ops import transform
+import pyproj
 
-# Criação da instância do FastAPI
+# Criação da aplicação FastAPI
 app = FastAPI()
 
-# Configuração do middleware CORS para permitir requisições de qualquer origem
+# Middleware para permitir chamadas de qualquer origem (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permite requisições de qualquer origem
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Permite todos os métodos HTTP
-    allow_headers=["*"],  # Permite todos os cabeçalhos
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+# Variáveis globais para guardar os dados carregados
+df_properties = None
+property_adjacency_list = defaultdict(list)  # Grafo de adjacência de propriedades
 
-# Rota POST para processar o grafo a partir de um CSV
-@app.post("/process_graph")
-async def process_graph(data: dict, limit: Optional[int] = Query(None,
-                                                                 description="Limite para o número de nós e arestas durante os testes")):
+# Função para tentar detetar e ler um CSV com diferentes separadores
+def parse_csv_data(csv_data: str):
+    separadores_possiveis = [';', ',', '\t']
+    df = None
+    for sep in separadores_possiveis:
+        try:
+            df = pd.read_csv(StringIO(csv_data), sep=sep, skipinitialspace=True)
+            if df.shape[1] > 1:
+                return df  # Devolve se tiver mais do que 1 coluna (CSV válido)
+        except pd.errors.ParserError:
+            continue
+    return None
+
+# Função para projetar geometria de WKT entre dois sistemas de coordenadas (ex: WGS84 para UTM)
+def project_geometry(geom_wkt: str, src_crs='EPSG:4326', target_crs='EPSG:32628'):
     try:
-        # Obtém os dados CSV passados na requisição
+        geom = loads(geom_wkt)  # Converte string WKT para objeto Shapely
+        if geom.is_empty:
+            return None
+        project_wgs_to_utm = partial(
+            pyproj.transform,
+            pyproj.Proj(src_crs),
+            pyproj.Proj(target_crs)
+        )
+        return transform(project_wgs_to_utm, geom)  # Aplica a transformação de coordenadas
+    except Exception as e:
+        print(f"Erro ao projetar geometria: {e}")
+        return None
+
+# Verifica se duas geometrias são adjacentes (tocam-se ou sobrepõem-se)
+def check_adjacency(geom1, geom2):
+    if geom1 is None or geom2 is None:
+        return False
+    return geom1.touches(geom2) or geom1.intersects(geom2)
+
+# Endpoint para obter detalhes de uma propriedade com base no seu ID
+@app.get("/properties/{objectid}")
+async def get_property_details(objectid: str):
+    global df_properties, property_adjacency_list
+    if df_properties is None:
+        return JSONResponse(content={"error": "Os dados das propriedades não foram carregados."}, status_code=400)
+
+    try:
+        # Filtra a linha com o ID correspondente
+        property_row = df_properties[df_properties['OBJECTID'].astype(str) == objectid].iloc[0]
+        if property_row.empty:
+            return JSONResponse(content={"error": f"Propriedade com ID {objectid} não encontrada."}, status_code=404)
+
+        owner = property_row.get('OWNER')
+        freguesia = property_row.get('Freguesia')
+
+        # Busca as propriedades adjacentes
+        adjacent_properties = property_adjacency_list.get(objectid, [])
+
+        return JSONResponse(content={
+            "id": str(objectid),
+            "owner": str(owner) if pd.notna(owner) else None,
+            "freguesia": str(freguesia) if pd.notna(freguesia) else None,
+            "adjacent_properties": [str(prop_id) for prop_id in adjacent_properties]
+        })
+    except IndexError:
+        return JSONResponse(content={"error": f"Propriedade com ID {objectid} não encontrada."}, status_code=404)
+    except Exception as e:
+        print(f"Erro ao obter detalhes da propriedade: {e}")
+        return JSONResponse(content={"error": "Erro interno do servidor"}, status_code=500)
+
+# Endpoint para processar grafo de adjacência entre propriedades
+@app.post("/process_properties_graph")
+async def process_properties_graph(data: dict, limit: Optional[int] = Query(None, description="Limite para o número de nós")):
+    try:
         csv_data = data.get("data")
-        print("Recebido CSV para grafo:\n", csv_data[:100] + "..." if len(csv_data) > 100 else csv_data)
-
-        # Definição de separadores possíveis para o CSV (pode ser ponto e vírgula, vírgula ou tabulação)
-        separadores_possiveis = [';', ',', '\t']
-        df = None
-        used_separator = None
-
-        # Tenta carregar o CSV com cada separador possível
-        for sep in separadores_possiveis:
-            try:
-                temp_df = pd.read_csv(StringIO(csv_data), sep=sep, skipinitialspace=True)
-                if temp_df.shape[1] > 1:  # Verifica se o CSV foi carregado corretamente (pelo menos 2 colunas)
-                    df = temp_df
-                    used_separator = sep
-                    break
-            except pd.errors.ParserError:
-                continue  # Caso ocorra um erro ao ler o CSV com o separador, tenta o próximo separador
-
-        # Se não for possível determinar o formato do CSV, retorna erro
+        df = parse_csv_data(csv_data)
         if df is None:
             return JSONResponse(content={"error": "Não foi possível determinar o formato do CSV."}, status_code=400)
 
-        print(f"CSV carregado com separador: '{used_separator}'")
-        print("Cabeçalho do DataFrame carregado para o grafo:\n", df.head())
+        # Armazena o DataFrame globalmente e limpa lista de adjacência
+        global df_properties, property_adjacency_list
+        df_properties = df
+        property_adjacency_list.clear()
 
-        # Colunas obrigatórias no CSV
-        required_columns = ['OBJECTID', 'OWNER', 'Freguesia']
+        # Verifica se todas as colunas necessárias estão presentes
+        required_columns = ['OBJECTID', 'geometry', 'OWNER', 'Freguesia']
         if not all(col in df.columns for col in required_columns):
-            return JSONResponse(
-                content={"error": f"O ficheiro CSV deve conter as colunas: {', '.join(required_columns)}."},
-                status_code=400,
-            )
+            return JSONResponse(content={"error": f"O CSV deve conter as colunas: {', '.join(required_columns)} para o grafo de propriedades."}, status_code=400)
 
-        # Inicializa as listas de nós e arestas, e um dicionário para mapear as propriedades
+        # Criação de nós e armazenamento das geometrias
         nodes = []
+        property_geometries = {}
+        for index, row in df.iterrows():
+            prop_id = str(row['OBJECTID'])
+            nodes.append({'id': prop_id, 'label': f"Propriedade {prop_id}", 'title': f"ID: {prop_id}"})
+            property_geometries[prop_id] = row['geometry']
+            if limit is not None and len(nodes) >= limit:
+                break
+
+        # Criação de arestas com base em adjacência
         edges = []
-        property_map = {}
-        processed_count = 0
+        processed_pairs = set()
+        property_ids = list(property_geometries.keys())
 
-        # Itera sobre as linhas do DataFrame para criar os nós do grafo
-        for index, row in df.iterrows():
-            property_id = str(row['OBJECTID'])
-            # Adiciona um nó com informações sobre a propriedade
-            nodes.append({
-                'id': property_id,
-                'label': f"Propriedade {property_id}\n({row['OWNER']})",
-                'title': f"ID: {property_id}<br>Proprietário: {row['OWNER']}<br>Freguesia: {row['Freguesia']}<br>Município: {row['Municipio'] if 'Municipio' in row else 'N/A'}",
-            })
-            # Mapeia o ID da propriedade para o índice da linha
-            property_map[property_id] = index
-            processed_count += 1
-            if limit is not None and processed_count >= limit:  # Aplica o limite de nós se necessário
-                print(f"Limite de {limit} nós atingido.")
-                break
-
-        final_nodes = nodes  # Aplica o limite aos nós
-
-        # Cria um dicionário para agrupar as propriedades por proprietário e freguesia
-        owner_freguesia_properties = defaultdict(list)
-        for index, row in df.iterrows():
-            if limit is not None and index >= limit:
-                break
-            owner_freguesia = (row['OWNER'], row['Freguesia'])
-            owner_freguesia_properties[owner_freguesia].append(str(row['OBJECTID']))
-
-        # Cria as arestas entre as propriedades com o mesmo proprietário e freguesia
-        for properties in owner_freguesia_properties.values():
-            if len(properties) > 1:
-                for i in range(len(properties)):
-                    for j in range(i + 1, len(properties)):
-                        source = properties[i]
-                        target = properties[j]
-                        edges.append({
-                            'from': source,
-                            'to': target,
-                        })
-            if limit is not None and len(edges) > limit * 5:  # Heurística para limitar o número de arestas
-                print(f"Limite aproximado de {limit * 5} arestas atingido.")
-                break
-
-        # Remove arestas duplicadas, garantindo que cada aresta é única
-        unique_edges = set()
-        final_edges = []
-        for edge in edges:
-            sorted_edge = tuple(sorted((edge['from'], edge['to'])))
-            if sorted_edge not in unique_edges:
-                unique_edges.add(sorted_edge)
-                final_edges.append(edge)
-            if limit is not None and len(final_edges) >= limit * 5:  # Aplica o limite de arestas
-                break
-
-        # Dados finais do grafo a serem retornados na resposta
-        graph_data = {
-            'nodes': final_nodes,
-            'edges': final_edges
+        projected_geometries = {
+            prop_id: project_geometry(geom_wkt)
+            for prop_id, geom_wkt in property_geometries.items()
         }
 
-        print(
-            f"Dados do grafo criados com sucesso (limit={'todos' if limit is None else limit} nós, {len(final_edges)} arestas).")
-        return JSONResponse(content=graph_data)
+        for i in range(len(property_ids)):
+            prop1_id = property_ids[i]
+            geom1_proj = projected_geometries.get(prop1_id)
+            for j in range(i + 1, len(property_ids)):
+                prop2_id = property_ids[j]
+                geom2_proj = projected_geometries.get(prop2_id)
+
+                sorted_pair = tuple(sorted((prop1_id, prop2_id)))
+                if sorted_pair not in processed_pairs:
+                    if check_adjacency(geom1_proj, geom2_proj):
+                        edges.append({'from': prop1_id, 'to': prop2_id})
+                        property_adjacency_list[prop1_id].append(prop2_id)
+                        property_adjacency_list[prop2_id].append(prop1_id)
+                    processed_pairs.add(sorted_pair)
+                    if limit is not None and len(edges) >= limit * 5:
+                        break
+            if limit is not None and len(edges) >= limit * 5:
+                break
+
+        return JSONResponse(content={"nodes": nodes, "edges": edges})
 
     except Exception as e:
-        # Se ocorrer um erro genérico durante o processamento, retorna um erro 500
-        print("Erro genérico no processamento do grafo:", e)
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+# Endpoint para gerar grafo com base na ligação entre propriedades do mesmo proprietário
+@app.post("/process_owners_graph")
+async def process_owners_graph(data: dict, limit: Optional[int] = Query(None, description="Limite para o número de nós e arestas")):
+    try:
+        csv_data = data.get("data")
+        df = parse_csv_data(csv_data)
+        if df is None:
+            return JSONResponse(content={"error": "Não foi possível determinar o formato do CSV."}, status_code=400)
+
+        required_columns = ['OWNER', 'OBJECTID']
+        if not all(col in df.columns for col in required_columns):
+            return JSONResponse(content={"error": f"O CSV deve conter as colunas: {', '.join(required_columns)} para o grafo de proprietários."}, status_code=400)
+
+        # Agrupamento de propriedades por proprietário
+        properties_by_owner = defaultdict(list)
+        for index, row in df.iterrows():
+            owner = row['OWNER']
+            prop_id = str(row['OBJECTID'])
+            properties_by_owner[owner].append(prop_id)
+            if limit is not None and index >= limit:
+                break
+
+        # Criação dos nós (propriedades)
+        nodes = []
+        for index, row in df.iterrows():
+            prop_id = str(row['OBJECTID'])
+            nodes.append({'id': prop_id, 'label': f"Propriedade {prop_id}", 'title': f"ID: {prop_id}<br>Proprietário: {row['OWNER']}"})
+            if limit is not None and len(nodes) >= limit:
+                break
+
+        # Criação das arestas entre propriedades do mesmo dono
+        edges = []
+        processed_edges = set()
+        for owner, prop_list in properties_by_owner.items():
+            for i in range(len(prop_list)):
+                for j in range(i + 1, len(prop_list)):
+                    prop1_id = prop_list[i]
+                    prop2_id = prop_list[j]
+                    sorted_edge = tuple(sorted((prop1_id, prop2_id)))
+                    if sorted_edge not in processed_edges:
+                        edges.append({'from': prop1_id, 'to': prop2_id})
+                        processed_edges.add(sorted_edge)
+                        if limit is not None and len(edges) >= limit * 5:
+                            break
+                if limit is not None and len(edges) >= limit * 5:
+                    break
+
+        return JSONResponse(content={"nodes": nodes, "edges": edges})
+
+    except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
