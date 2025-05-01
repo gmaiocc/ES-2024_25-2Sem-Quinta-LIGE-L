@@ -3,8 +3,10 @@
 
 <head>
     <meta charset="UTF-8"> <!-- Define o conjunto de caracteres como UTF-8 -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Torna a página responsiva para dispositivos móveis -->
-    <title>Visualização de Cadastro de Propriedades e Proprietários</title> <!-- Título da página apresentado no separador do navegador -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Torna a página responsiva para dispositivos móveis -->
+    <title>Visualização de Cadastro de Propriedades e Proprietários</title>
+    <!-- Título da página apresentado no separador do navegador -->
 
     <link rel="stylesheet" href="style.css"> <!-- Liga o ficheiro CSS externo para estilos -->
 </head>
@@ -19,6 +21,14 @@
         <button onclick="processPropertiesGraph()">Criar Grafo de Propriedades</button>
         <!-- Botão para gerar o grafo de proprietários (baseado na partilha de propriedades) -->
         <button onclick="processOwnersGraph()">Criar Grafo de Proprietários</button>
+        <select id="areaLevel">
+            <option value="Freguesia">Freguesia</option>
+            <option value="Concelho">Concelho</option>
+            <option value="Distrito">Distrito</option>
+        </select>
+        <input type="text" id="areaName" placeholder="Nome (ex: Lisboa)">
+        <button onclick="getAverageArea()">Área Média</button>
+        <button onclick="getAverageAreaGrouped()">Área Média Agrupada</button>
     </div>
 
     <h2>Grafo de Propriedades (Arestas por Adjacência Geométrica)</h2>
@@ -29,6 +39,11 @@
         <div id="propertyInfo">
             <h3>Detalhes da Propriedade</h3>
             <p>Clique num nó para ver os detalhes.</p>
+        </div>
+        <!-- Div onde serão mostrados os detalhes da média de areas das propriedades -->
+        <div id="averageAreaInfo">
+            <h3>Área Média</h3>
+            <p>Selecione um nível e insira um nome para calcular.</p>
         </div>
     </div>
 
@@ -151,7 +166,7 @@
             // Quando a leitura do ficheiro estiver concluída
             reader.onload = function (event) {
                 const csvData = event.target.result;
-                const testLimit = 50; // Número máximo de registos a processar
+                const testLimit = 2000; // Número máximo de registos a processar
 
                 // Envia os dados para o servidor via POST
                 fetch(`http://127.0.0.1:8000/process_properties_graph?limit=${testLimit}`, {
@@ -161,17 +176,63 @@
                     },
                     body: JSON.stringify({ data: csvData })
                 })
-                .then(response => response.json())
-                .then(drawGraph.bind(null, 'propertiesNetwork')) // Chama a função para desenhar o grafo
-                .catch(error => {
-                    console.error('Erro ao processar o ficheiro para o grafo de propriedades:', error);
-                    alert("Erro ao comunicar com o servidor para o grafo de propriedades.");
-                });
+                    .then(response => response.json())
+                    .then(drawGraph.bind(null, 'propertiesNetwork')) // Chama a função para desenhar o grafo
+                    .catch(error => {
+                        console.error('Erro ao processar o ficheiro para o grafo de propriedades:', error);
+                        alert("Erro ao comunicar com o servidor para o grafo de propriedades.");
+                    });
             };
 
             reader.readAsText(file); // Lê o conteúdo do ficheiro como texto
         }
+        function getAverageArea() {
+            const level = document.getElementById('areaLevel').value;
+            const name = document.getElementById('areaName').value.trim();
+            if (!name) return alert('Insira um nome para ' + level + '.');
 
+            fetch(`http://127.0.0.1:8000/average_area?level=${level}&name=${encodeURIComponent(name)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.detail || data.error) {
+                        document.getElementById('averageAreaInfo').innerHTML =
+                            `<h3>Área Média</h3><p>Erro: ${data.detail || data.error}</p>`;
+                    } else {
+                        document.getElementById('averageAreaInfo').innerHTML =
+                            `<h3>Área Média</h3>
+           <p><strong>${data.level}:</strong> ${data.name}</p>
+           <p><strong>Propriedades:</strong> ${data.count}</p>
+           <p><strong>Área Média:</strong> ${data.mean_area_m2.toFixed(2)} ${data.unit}</p>`;
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Erro ao calcular a área média.');
+                });
+        }
+
+        function getAverageAreaGrouped() {
+            const level = document.getElementById('areaLevel').value;
+            const name = document.getElementById('areaName').value.trim();
+            if (!name) return alert('Insira um nome para ' + level + '.');
+
+            fetch(`http://127.0.0.1:8000/average_area_grouped?level=${level}&name=${encodeURIComponent(name)}`)
+                .then(res => res.json())
+                .then(data => {
+                    const info = document.getElementById('averageAreaInfo');
+                    if (data.detail || data.error) {
+                        info.innerHTML = `<h3>Área Média Agrupada</h3><p>Erro: ${data.detail || data.error}</p>`;
+                    } else {
+                        info.innerHTML = `
+            <h3>Área Média Agrupada</h3>
+            <p><strong>${data.level}:</strong> ${data.name}</p>
+            <p><strong>Grupos:</strong> ${data.count}</p>
+            <p><strong>Área Média:</strong> ${data.mean_area_m2.toFixed(2)} ${data.unit}</p>
+          `;
+                    }
+                })
+                .catch(() => alert('Erro ao calcular a área média agrupada.'));
+        }
         // Função para processar o ficheiro CSV e gerar o grafo de proprietários
         function processOwnersGraph() {
             const fileInput = document.getElementById('fileInput');
@@ -197,12 +258,12 @@
                     },
                     body: JSON.stringify({ data: csvData })
                 })
-                .then(response => response.json())
-                .then(drawGraph.bind(null, 'ownersNetwork')) // Chama a função para desenhar o grafo
-                .catch(error => {
-                    console.error('Erro ao processar o ficheiro para o grafo de proprietários:', error);
-                    alert("Erro ao comunicar com o servidor para o grafo de proprietários.");
-                });
+                    .then(response => response.json())
+                    .then(drawGraph.bind(null, 'ownersNetwork')) // Chama a função para desenhar o grafo
+                    .catch(error => {
+                        console.error('Erro ao processar o ficheiro para o grafo de proprietários:', error);
+                        alert("Erro ao comunicar com o servidor para o grafo de proprietários.");
+                    });
             };
 
             reader.readAsText(file); // Lê o conteúdo do ficheiro como texto

@@ -1,12 +1,13 @@
 # Importações necessárias
 from functools import partial
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 from io import StringIO
 from collections import defaultdict
 from typing import Optional
+import shapely
 from shapely.wkt import loads
 from shapely.geometry import Polygon
 from shapely.ops import transform
@@ -208,3 +209,114 @@ async def process_owners_graph(data: dict, limit: Optional[int] = Query(None, de
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+    
+#FEATURE 4: Permita calcular a área média das propriedades, de uma área geográfica/administrativa indicada pelo utilizador
+#(freguesia, concelho, distrito);
+@app.get("/average_area")
+async def get_average_area(
+    level: str = Query(..., regex="^(Freguesia|Concelho|Distrito)$"),
+    name: str = Query(...)
+):
+    global df_properties
+    if df_properties is None:
+        raise HTTPException(400, "Dados de propriedades não carregados.")
+
+    if level not in df_properties.columns:
+        raise HTTPException(400, f"Coluna '{level}' não existe nos dados.")
+
+    df_filtro = df_properties[df_properties[level] == name]
+    if df_filtro.empty:
+        raise HTTPException(404, f"Nenhuma propriedade para {level} = '{name}'.")
+
+    if 'Shape_Area' in df_filtro.columns:
+        arr = df_filtro['Shape_Area'].dropna().astype(float)
+        if arr.empty:
+            raise HTTPException(500, "Shape_Area está vazio ou inválido.")
+        mean_area = float(arr.mean())
+        count = int(arr.count())
+    else:
+        areas = []
+        for _, row in df_filtro.iterrows():
+            geom_proj = project_geometry(row["geometry"])
+            if geom_proj and not geom_proj.is_empty:
+                a = geom_proj.area
+                if a == a and abs(a) < 1e30:
+                    areas.append(a)
+        if not areas:
+            raise HTTPException(500, "Não foi possível calcular áreas geométricas.")
+        mean_area = float(sum(areas) / len(areas))
+        count = len(areas)
+
+    return {
+        "level": level,
+        "name": name,
+        "mean_area_m2": mean_area,
+        "unit": "m²",
+        "count": count
+    }
+    
+    
+#FEATURE 5: Permita calcular a área média das propriedades, assumindo que propriedades adjacentes, do mesmo proprietário,
+# devem ser consideradas como uma única propriedade, para uma área geográfica/administrativa indicada pelo utilizador;
+from collections import deque
+
+@app.get("/average_area_grouped")
+async def get_average_area_grouped(
+    level: str = Query(..., regex="^(Freguesia|Concelho|Distrito)$"),
+    name: str = Query(...)
+):
+    global df_properties
+    if df_properties is None:
+        raise HTTPException(400, "Dados de propriedades não carregados.")
+    if level not in df_properties.columns:
+        raise HTTPException(400, f"Coluna '{level}' não existe.")
+
+    df_filtro = df_properties[df_properties[level] == name]
+    if df_filtro.empty:
+        raise HTTPException(404, f"Nenhuma propriedade para {level} = '{name}'.")
+
+    # Usa Shape_Area para agrupar por OWNER
+    if 'Shape_Area' in df_filtro.columns:
+        # soma a área de cada proprietário
+        series = (
+            df_filtro
+            .groupby('OWNER')['Shape_Area']
+            .sum()
+            .dropna()
+            .astype(float)
+        )
+        if series.empty:
+            raise HTTPException(500, "Shape_Area inválido ou vazio.")
+        areas = series.tolist()
+    else:
+        # fallback geométrico: projeta + junta tudo de cada owner
+        from shapely.ops import unary_union
+        owner_groups = df_filtro.groupby('OWNER')['geometry']
+        areas = []
+        for wkt_list in owner_groups:
+            geoms = [
+                g for g in
+                (project_geometry(w) for w in wkt_list[1].dropna())
+                if g and not g.is_empty
+            ]
+            if not geoms:
+                continue
+            merged = unary_union(geoms)
+            # se devolve GeometryCollection, extrai polígonos
+            comps = [merged] if merged.geom_type.startswith('Polygon') else list(merged.geoms)
+            for poly in comps:
+                a = poly.area
+                if a == a and abs(a) < 1e30:
+                    areas.append(a)
+
+        if not areas:
+            raise HTTPException(500, "Não foi possível calcular áreas geométricas agrupadas.")
+
+    mean_area = float(sum(areas) / len(areas))
+    return {
+        "level": level,
+        "name": name,
+        "mean_area_m2": mean_area,
+        "unit": "m²",
+        "count": len(areas)
+    }
