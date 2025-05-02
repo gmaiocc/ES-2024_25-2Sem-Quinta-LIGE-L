@@ -12,6 +12,8 @@ from shapely.wkt import loads
 from shapely.geometry import Polygon
 from shapely.ops import transform
 import pyproj
+from itertools import combinations, product
+from collections import deque
 
 # Criação da aplicação FastAPI
 app = FastAPI()
@@ -318,7 +320,6 @@ async def get_average_area(
 
 # FEATURE 5: Permita calcular a área média das propriedades, assumindo que propriedades adjacentes, do mesmo proprietário,
 # devem ser consideradas como uma única propriedade, para uma área geográfica/administrativa indicada pelo utilizador;
-from collections import deque
 
 
 @app.get("/average_area_grouped")
@@ -382,3 +383,69 @@ async def get_average_area_grouped(
         "unit": "m²",
         "count": len(areas),
     }
+
+
+@app.get("/suggest_trades")
+async def suggest_trades(
+    level: str = Query(..., regex="^(Freguesia|Concelho|Distrito)$"),
+    name: str = Query(...),
+    top: int = Query(5, ge=1),
+):
+    global df_properties
+    if df_properties is None:
+        raise HTTPException(400, "Dados não carregados.")
+    if level not in df_properties.columns:
+        raise HTTPException(400, f"Coluna '{level}' não existe.")
+
+    # filtra pela área indicada
+    df = df_properties[df_properties[level] == name]
+    if df.empty:
+        raise HTTPException(404, "Sem propriedades nessa área.")
+
+    if "Shape_Area" not in df.columns:
+        raise HTTPException(500, "É necessária coluna Shape_Area.")
+
+    # agrupa por OWNER: lista de (OBJECTID, area)
+    owners = {
+        owner: list(g[["OBJECTID", "Shape_Area"]].itertuples(index=False, name=None))
+        for owner, g in df.groupby("OWNER")
+        if len(g) > 0
+    }
+    if len(owners) < 2:
+        raise HTTPException(404, "Menos de dois proprietários para trocar.")
+
+    # pré-calcula somas e contagens
+    stats = {
+        owner: {"sum": sum(a for _, a in props), "count": len(props)}
+        for owner, props in owners.items()
+    }
+
+    suggestions = []
+    # para cada par de proprietários
+    for o1, o2 in combinations(owners, 2):
+        sum1, cnt1 = stats[o1]["sum"], stats[o1]["count"]
+        sum2, cnt2 = stats[o2]["sum"], stats[o2]["count"]
+        # cada possível troca de uma propriedade
+        for (id1, a1), (id2, a2) in product(owners[o1], owners[o2]):
+            new_avg1 = (sum1 - a1 + a2) / cnt1
+            new_avg2 = (sum2 - a2 + a1) / cnt2
+            delta = (new_avg1 - sum1 / cnt1) + (new_avg2 - sum2 / cnt2)
+            area_diff = abs(a1 - a2)
+            # potencial = ganho total dividido pela diferença de áreas (+1 para evitar div/zero)
+            potential = delta / (area_diff + 1e-6)
+            suggestions.append(
+                {
+                    "owner1": o1,
+                    "prop1": id1,
+                    "area1": a1,
+                    "owner2": o2,
+                    "prop2": id2,
+                    "area2": a2,
+                    "delta_avg_total": delta,
+                    "potential_score": potential,
+                }
+            )
+
+    # ordena por potencial e devolve top N
+    best = sorted(suggestions, key=lambda s: s["potential_score"], reverse=True)[:top]
+    return {"level": level, "name": name, "suggestions": best}
