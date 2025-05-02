@@ -29,6 +29,9 @@
         <input type="text" id="areaName" placeholder="Nome (ex: Lisboa)">
         <button onclick="getAverageArea()">Área Média</button>
         <button onclick="getAverageAreaGrouped()">Área Média Agrupada</button>
+         <!-- NOVA FEATURE 6 -->
+         <input type="number" id="topN" placeholder="Top N sugestões" min="1" value="5">
+         <button onclick="getSuggestedTrades()">Sugestões de Trocas</button>
     </div>
 
     <h2>Grafo de Propriedades (Arestas por Adjacência Geométrica)</h2>
@@ -44,6 +47,12 @@
         <div id="averageAreaInfo">
             <h3>Área Média</h3>
             <p>Selecione um nível e insira um nome para calcular.</p>
+        </div>
+        <br>
+        <!-- AREA DE FEATURE 6 MOVIDA ABAIXO -->
+        <div id="tradeSuggestions">
+            <h3>Sugestões de Trocas</h3>
+            <p>Utilize os controles acima para gerar sugestões.</p>
         </div>
     </div>
 
@@ -150,7 +159,38 @@
                     console.error("Erro ao buscar detalhes da propriedade:", error);
                 });
         }
+// Feature 6: Sugestões de Trocas
+function getSuggestedTrades() {
+    const level = document.getElementById('areaLevel').value;
+    const name = document.getElementById('areaName').value.trim();
+    const top = parseInt(document.getElementById('topN').value, 10);
+    if (!name) return alert('Insira um nome para ' + level + '.');
+    if (isNaN(top) || top < 1) return alert('Insira um valor válido para Top N.');
 
+    fetch(`http://127.0.0.1:8000/suggest_trades?level=${level}&name=${encodeURIComponent(name)}&top=${top}`)
+        .then(res => res.json())
+        .then(data => {
+            const container = document.getElementById('tradeSuggestions');
+            if (data.detail || data.error) {
+                container.innerHTML = `<h3>Sugestões de Trocas</h3><p>Erro: ${data.detail || data.error}</p>`;
+                return;
+            }
+            // Monta lista de sugestões
+            let html = `<h3>Sugestões de Trocas (Top ${top})</h3><ul>`;
+            data.suggestions.forEach(s => {
+                html += `<li>Proprietário ${s.owner1} troca propriedade ${s.prop1} (${s.area1.toFixed(2)} m²) ` +
+                        `com ${s.owner2}, propriedade ${s.prop2} (${s.area2.toFixed(2)} m²): ` +
+                        `ganho médio total ${s.delta_avg_total.toFixed(2)} m², ` +
+                        `pontuação ${s.potential_score.toFixed(4)}</li>`;
+            });
+            html += '</ul>';
+            container.innerHTML = html;
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Erro ao obter sugestões de trocas.');
+        });
+}
         // Função para processar o ficheiro CSV e gerar o grafo de propriedades
         function processPropertiesGraph() {
             const fileInput = document.getElementById('fileInput');
@@ -166,7 +206,7 @@
             // Quando a leitura do ficheiro estiver concluída
             reader.onload = function (event) {
                 const csvData = event.target.result;
-                const testLimit = 2000; // Número máximo de registos a processar
+                const testLimit = 100; // Número máximo de registos a processar
 
                 // Envia os dados para o servidor via POST
                 fetch(`http://127.0.0.1:8000/process_properties_graph?limit=${testLimit}`, {
