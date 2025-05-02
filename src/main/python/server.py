@@ -449,3 +449,6 @@ async def suggest_trades(
     # ordena por potencial e devolve top N
     best = sorted(suggestions, key=lambda s: s["potential_score"], reverse=True)[:top]
     return {"level": level, "name": name, "suggestions": best}
+
+
+##new branch
