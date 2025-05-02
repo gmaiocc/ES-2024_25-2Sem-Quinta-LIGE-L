@@ -29,9 +29,10 @@ app.add_middleware(
 df_properties = None
 property_adjacency_list = defaultdict(list)  # Grafo de adjacência de propriedades
 
+
 # Função para tentar detetar e ler um CSV com diferentes separadores
 def parse_csv_data(csv_data: str):
-    separadores_possiveis = [';', ',', '\t']
+    separadores_possiveis = [";", ",", "\t"]
     df = None
     for sep in separadores_possiveis:
         try:
@@ -42,21 +43,23 @@ def parse_csv_data(csv_data: str):
             continue
     return None
 
+
 # Função para projetar geometria de WKT entre dois sistemas de coordenadas (ex: WGS84 para UTM)
-def project_geometry(geom_wkt: str, src_crs='EPSG:4326', target_crs='EPSG:32628'):
+def project_geometry(geom_wkt: str, src_crs="EPSG:4326", target_crs="EPSG:32628"):
     try:
         geom = loads(geom_wkt)  # Converte string WKT para objeto Shapely
         if geom.is_empty:
             return None
         project_wgs_to_utm = partial(
-            pyproj.transform,
-            pyproj.Proj(src_crs),
-            pyproj.Proj(target_crs)
+            pyproj.transform, pyproj.Proj(src_crs), pyproj.Proj(target_crs)
         )
-        return transform(project_wgs_to_utm, geom)  # Aplica a transformação de coordenadas
+        return transform(
+            project_wgs_to_utm, geom
+        )  # Aplica a transformação de coordenadas
     except Exception as e:
         print(f"Erro ao projetar geometria: {e}")
         return None
+
 
 # Verifica se duas geometrias são adjacentes (tocam-se ou sobrepõem-se)
 def check_adjacency(geom1, geom2):
@@ -64,45 +67,70 @@ def check_adjacency(geom1, geom2):
         return False
     return geom1.touches(geom2) or geom1.intersects(geom2)
 
+
 # Endpoint para obter detalhes de uma propriedade com base no seu ID
 @app.get("/properties/{objectid}")
 async def get_property_details(objectid: str):
     global df_properties, property_adjacency_list
     if df_properties is None:
-        return JSONResponse(content={"error": "Os dados das propriedades não foram carregados."}, status_code=400)
+        return JSONResponse(
+            content={"error": "Os dados das propriedades não foram carregados."},
+            status_code=400,
+        )
 
     try:
         # Filtra a linha com o ID correspondente
-        property_row = df_properties[df_properties['OBJECTID'].astype(str) == objectid].iloc[0]
+        property_row = df_properties[
+            df_properties["OBJECTID"].astype(str) == objectid
+        ].iloc[0]
         if property_row.empty:
-            return JSONResponse(content={"error": f"Propriedade com ID {objectid} não encontrada."}, status_code=404)
+            return JSONResponse(
+                content={"error": f"Propriedade com ID {objectid} não encontrada."},
+                status_code=404,
+            )
 
-        owner = property_row.get('OWNER')
-        freguesia = property_row.get('Freguesia')
+        owner = property_row.get("OWNER")
+        freguesia = property_row.get("Freguesia")
 
         # Busca as propriedades adjacentes
         adjacent_properties = property_adjacency_list.get(objectid, [])
 
-        return JSONResponse(content={
-            "id": str(objectid),
-            "owner": str(owner) if pd.notna(owner) else None,
-            "freguesia": str(freguesia) if pd.notna(freguesia) else None,
-            "adjacent_properties": [str(prop_id) for prop_id in adjacent_properties]
-        })
+        return JSONResponse(
+            content={
+                "id": str(objectid),
+                "owner": str(owner) if pd.notna(owner) else None,
+                "freguesia": str(freguesia) if pd.notna(freguesia) else None,
+                "adjacent_properties": [
+                    str(prop_id) for prop_id in adjacent_properties
+                ],
+            }
+        )
     except IndexError:
-        return JSONResponse(content={"error": f"Propriedade com ID {objectid} não encontrada."}, status_code=404)
+        return JSONResponse(
+            content={"error": f"Propriedade com ID {objectid} não encontrada."},
+            status_code=404,
+        )
     except Exception as e:
         print(f"Erro ao obter detalhes da propriedade: {e}")
-        return JSONResponse(content={"error": "Erro interno do servidor"}, status_code=500)
+        return JSONResponse(
+            content={"error": "Erro interno do servidor"}, status_code=500
+        )
+
 
 # Endpoint para processar grafo de adjacência entre propriedades
 @app.post("/process_properties_graph")
-async def process_properties_graph(data: dict, limit: Optional[int] = Query(None, description="Limite para o número de nós")):
+async def process_properties_graph(
+    data: dict,
+    limit: Optional[int] = Query(None, description="Limite para o número de nós"),
+):
     try:
         csv_data = data.get("data")
         df = parse_csv_data(csv_data)
         if df is None:
-            return JSONResponse(content={"error": "Não foi possível determinar o formato do CSV."}, status_code=400)
+            return JSONResponse(
+                content={"error": "Não foi possível determinar o formato do CSV."},
+                status_code=400,
+            )
 
         # Armazena o DataFrame globalmente e limpa lista de adjacência
         global df_properties, property_adjacency_list
@@ -110,17 +138,28 @@ async def process_properties_graph(data: dict, limit: Optional[int] = Query(None
         property_adjacency_list.clear()
 
         # Verifica se todas as colunas necessárias estão presentes
-        required_columns = ['OBJECTID', 'geometry', 'OWNER', 'Freguesia']
+        required_columns = ["OBJECTID", "geometry", "OWNER", "Freguesia"]
         if not all(col in df.columns for col in required_columns):
-            return JSONResponse(content={"error": f"O CSV deve conter as colunas: {', '.join(required_columns)} para o grafo de propriedades."}, status_code=400)
+            return JSONResponse(
+                content={
+                    "error": f"O CSV deve conter as colunas: {', '.join(required_columns)} para o grafo de propriedades."
+                },
+                status_code=400,
+            )
 
         # Criação de nós e armazenamento das geometrias
         nodes = []
         property_geometries = {}
         for index, row in df.iterrows():
-            prop_id = str(row['OBJECTID'])
-            nodes.append({'id': prop_id, 'label': f"Propriedade {prop_id}", 'title': f"ID: {prop_id}"})
-            property_geometries[prop_id] = row['geometry']
+            prop_id = str(row["OBJECTID"])
+            nodes.append(
+                {
+                    "id": prop_id,
+                    "label": f"Propriedade {prop_id}",
+                    "title": f"ID: {prop_id}",
+                }
+            )
+            property_geometries[prop_id] = row["geometry"]
             if limit is not None and len(nodes) >= limit:
                 break
 
@@ -144,7 +183,7 @@ async def process_properties_graph(data: dict, limit: Optional[int] = Query(None
                 sorted_pair = tuple(sorted((prop1_id, prop2_id)))
                 if sorted_pair not in processed_pairs:
                     if check_adjacency(geom1_proj, geom2_proj):
-                        edges.append({'from': prop1_id, 'to': prop2_id})
+                        edges.append({"from": prop1_id, "to": prop2_id})
                         property_adjacency_list[prop1_id].append(prop2_id)
                         property_adjacency_list[prop2_id].append(prop1_id)
                     processed_pairs.add(sorted_pair)
@@ -158,24 +197,38 @@ async def process_properties_graph(data: dict, limit: Optional[int] = Query(None
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
+
 # Endpoint para gerar grafo com base na ligação entre propriedades do mesmo proprietário
 @app.post("/process_owners_graph")
-async def process_owners_graph(data: dict, limit: Optional[int] = Query(None, description="Limite para o número de nós e arestas")):
+async def process_owners_graph(
+    data: dict,
+    limit: Optional[int] = Query(
+        None, description="Limite para o número de nós e arestas"
+    ),
+):
     try:
         csv_data = data.get("data")
         df = parse_csv_data(csv_data)
         if df is None:
-            return JSONResponse(content={"error": "Não foi possível determinar o formato do CSV."}, status_code=400)
+            return JSONResponse(
+                content={"error": "Não foi possível determinar o formato do CSV."},
+                status_code=400,
+            )
 
-        required_columns = ['OWNER', 'OBJECTID']
+        required_columns = ["OWNER", "OBJECTID"]
         if not all(col in df.columns for col in required_columns):
-            return JSONResponse(content={"error": f"O CSV deve conter as colunas: {', '.join(required_columns)} para o grafo de proprietários."}, status_code=400)
+            return JSONResponse(
+                content={
+                    "error": f"O CSV deve conter as colunas: {', '.join(required_columns)} para o grafo de proprietários."
+                },
+                status_code=400,
+            )
 
         # Agrupamento de propriedades por proprietário
         properties_by_owner = defaultdict(list)
         for index, row in df.iterrows():
-            owner = row['OWNER']
-            prop_id = str(row['OBJECTID'])
+            owner = row["OWNER"]
+            prop_id = str(row["OBJECTID"])
             properties_by_owner[owner].append(prop_id)
             if limit is not None and index >= limit:
                 break
@@ -183,8 +236,14 @@ async def process_owners_graph(data: dict, limit: Optional[int] = Query(None, de
         # Criação dos nós (propriedades)
         nodes = []
         for index, row in df.iterrows():
-            prop_id = str(row['OBJECTID'])
-            nodes.append({'id': prop_id, 'label': f"Propriedade {prop_id}", 'title': f"ID: {prop_id}<br>Proprietário: {row['OWNER']}"})
+            prop_id = str(row["OBJECTID"])
+            nodes.append(
+                {
+                    "id": prop_id,
+                    "label": f"Propriedade {prop_id}",
+                    "title": f"ID: {prop_id}<br>Proprietário: {row['OWNER']}",
+                }
+            )
             if limit is not None and len(nodes) >= limit:
                 break
 
@@ -198,7 +257,7 @@ async def process_owners_graph(data: dict, limit: Optional[int] = Query(None, de
                     prop2_id = prop_list[j]
                     sorted_edge = tuple(sorted((prop1_id, prop2_id)))
                     if sorted_edge not in processed_edges:
-                        edges.append({'from': prop1_id, 'to': prop2_id})
+                        edges.append({"from": prop1_id, "to": prop2_id})
                         processed_edges.add(sorted_edge)
                         if limit is not None and len(edges) >= limit * 5:
                             break
@@ -209,13 +268,14 @@ async def process_owners_graph(data: dict, limit: Optional[int] = Query(None, de
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
-    
-#FEATURE 4: Permita calcular a área média das propriedades, de uma área geográfica/administrativa indicada pelo utilizador
-#(freguesia, concelho, distrito);
+
+
+# FEATURE 4: Permita calcular a área média das propriedades, de uma área geográfica/administrativa indicada pelo utilizador
+# (freguesia, concelho, distrito);
 @app.get("/average_area")
 async def get_average_area(
     level: str = Query(..., regex="^(Freguesia|Concelho|Distrito)$"),
-    name: str = Query(...)
+    name: str = Query(...),
 ):
     global df_properties
     if df_properties is None:
@@ -228,8 +288,8 @@ async def get_average_area(
     if df_filtro.empty:
         raise HTTPException(404, f"Nenhuma propriedade para {level} = '{name}'.")
 
-    if 'Shape_Area' in df_filtro.columns:
-        arr = df_filtro['Shape_Area'].dropna().astype(float)
+    if "Shape_Area" in df_filtro.columns:
+        arr = df_filtro["Shape_Area"].dropna().astype(float)
         if arr.empty:
             raise HTTPException(500, "Shape_Area está vazio ou inválido.")
         mean_area = float(arr.mean())
@@ -252,18 +312,19 @@ async def get_average_area(
         "name": name,
         "mean_area_m2": mean_area,
         "unit": "m²",
-        "count": count
+        "count": count,
     }
-    
-    
-#FEATURE 5: Permita calcular a área média das propriedades, assumindo que propriedades adjacentes, do mesmo proprietário,
+
+
+# FEATURE 5: Permita calcular a área média das propriedades, assumindo que propriedades adjacentes, do mesmo proprietário,
 # devem ser consideradas como uma única propriedade, para uma área geográfica/administrativa indicada pelo utilizador;
 from collections import deque
+
 
 @app.get("/average_area_grouped")
 async def get_average_area_grouped(
     level: str = Query(..., regex="^(Freguesia|Concelho|Distrito)$"),
-    name: str = Query(...)
+    name: str = Query(...),
 ):
     global df_properties
     if df_properties is None:
@@ -276,41 +337,42 @@ async def get_average_area_grouped(
         raise HTTPException(404, f"Nenhuma propriedade para {level} = '{name}'.")
 
     # Usa Shape_Area para agrupar por OWNER
-    if 'Shape_Area' in df_filtro.columns:
+    if "Shape_Area" in df_filtro.columns:
         # soma a área de cada proprietário
-        series = (
-            df_filtro
-            .groupby('OWNER')['Shape_Area']
-            .sum()
-            .dropna()
-            .astype(float)
-        )
+        series = df_filtro.groupby("OWNER")["Shape_Area"].sum().dropna().astype(float)
         if series.empty:
             raise HTTPException(500, "Shape_Area inválido ou vazio.")
         areas = series.tolist()
     else:
         # fallback geométrico: projeta + junta tudo de cada owner
         from shapely.ops import unary_union
-        owner_groups = df_filtro.groupby('OWNER')['geometry']
+
+        owner_groups = df_filtro.groupby("OWNER")["geometry"]
         areas = []
         for wkt_list in owner_groups:
             geoms = [
-                g for g in
-                (project_geometry(w) for w in wkt_list[1].dropna())
+                g
+                for g in (project_geometry(w) for w in wkt_list[1].dropna())
                 if g and not g.is_empty
             ]
             if not geoms:
                 continue
             merged = unary_union(geoms)
             # se devolve GeometryCollection, extrai polígonos
-            comps = [merged] if merged.geom_type.startswith('Polygon') else list(merged.geoms)
+            comps = (
+                [merged]
+                if merged.geom_type.startswith("Polygon")
+                else list(merged.geoms)
+            )
             for poly in comps:
                 a = poly.area
                 if a == a and abs(a) < 1e30:
                     areas.append(a)
 
         if not areas:
-            raise HTTPException(500, "Não foi possível calcular áreas geométricas agrupadas.")
+            raise HTTPException(
+                500, "Não foi possível calcular áreas geométricas agrupadas."
+            )
 
     mean_area = float(sum(areas) / len(areas))
     return {
@@ -318,5 +380,5 @@ async def get_average_area_grouped(
         "name": name,
         "mean_area_m2": mean_area,
         "unit": "m²",
-        "count": len(areas)
+        "count": len(areas),
     }
