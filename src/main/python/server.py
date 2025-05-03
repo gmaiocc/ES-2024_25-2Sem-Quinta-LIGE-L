@@ -321,7 +321,6 @@ async def get_average_area(
 # FEATURE 5: Permita calcular a área média das propriedades, assumindo que propriedades adjacentes, do mesmo proprietário,
 # devem ser consideradas como uma única propriedade, para uma área geográfica/administrativa indicada pelo utilizador;
 
-
 @app.get("/average_area_grouped")
 async def get_average_area_grouped(
     level: str = Query(..., regex="^(Freguesia|Concelho|Distrito)$"),

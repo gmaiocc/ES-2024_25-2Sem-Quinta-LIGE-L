@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: module server</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title">server</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:c%3A%5Cusers%5Cgonca%5Ces-2024_25-2sem-quinta-lige-l%5Csrc%5Cmain%5Cpython%5Cserver.py">c:\users\gonca\es-2024_25-2sem-quinta-lige-l\src\main\python\server.py</a></td></tr></table>
+    <p><span class="code">#&nbsp;Importações&nbsp;necessárias</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="pandas.html">pandas</a><br>
+</td><td class="multicolumn"><a href="pyproj.html">pyproj</a><br>
+</td><td class="multicolumn"><a href="shapely.html">shapely</a><br>
+</td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-check_adjacency"><strong>check_adjacency</strong></a>(geom1, geom2)</dt><dd><span class="code">#&nbsp;Verifica&nbsp;se&nbsp;duas&nbsp;geometrias&nbsp;são&nbsp;adjacentes&nbsp;(tocam-se&nbsp;ou&nbsp;sobrepõem-se)</span></dd></dl>
+ <dl><dt>async <a name="-get_average_area"><strong>get_average_area</strong></a>(level: str = Query(PydanticUndefined), name: str = Query(PydanticUndefined))</dt><dd><span class="code">#&nbsp;FEATURE&nbsp;4:&nbsp;Permita&nbsp;calcular&nbsp;a&nbsp;área&nbsp;média&nbsp;das&nbsp;propriedades,&nbsp;de&nbsp;uma&nbsp;área&nbsp;geográfica/administrativa&nbsp;indicada&nbsp;pelo&nbsp;utilizador<br>
+#&nbsp;(freguesia,&nbsp;concelho,&nbsp;distrito);</span></dd></dl>
+ <dl><dt>async <a name="-get_average_area_grouped"><strong>get_average_area_grouped</strong></a>(level: str = Query(PydanticUndefined), name: str = Query(PydanticUndefined))</dt></dl>
+ <dl><dt>async <a name="-get_property_details"><strong>get_property_details</strong></a>(objectid: str)</dt><dd><span class="code">#&nbsp;Endpoint&nbsp;para&nbsp;obter&nbsp;detalhes&nbsp;de&nbsp;uma&nbsp;propriedade&nbsp;com&nbsp;base&nbsp;no&nbsp;seu&nbsp;ID</span></dd></dl>
+ <dl><dt><a name="-parse_csv_data"><strong>parse_csv_data</strong></a>(csv_data: str)</dt><dd><span class="code">#&nbsp;Função&nbsp;para&nbsp;tentar&nbsp;detetar&nbsp;e&nbsp;ler&nbsp;um&nbsp;CSV&nbsp;com&nbsp;diferentes&nbsp;separadores</span></dd></dl>
+ <dl><dt>async <a name="-process_owners_graph"><strong>process_owners_graph</strong></a>(data: dict, limit: Optional[int] = Query(None))</dt><dd><span class="code">#&nbsp;Endpoint&nbsp;para&nbsp;gerar&nbsp;grafo&nbsp;com&nbsp;base&nbsp;na&nbsp;ligação&nbsp;entre&nbsp;propriedades&nbsp;do&nbsp;mesmo&nbsp;proprietário</span></dd></dl>
+ <dl><dt>async <a name="-process_properties_graph"><strong>process_properties_graph</strong></a>(data: dict, limit: Optional[int] = Query(None))</dt><dd><span class="code">#&nbsp;Endpoint&nbsp;para&nbsp;processar&nbsp;grafo&nbsp;de&nbsp;adjacência&nbsp;entre&nbsp;propriedades</span></dd></dl>
+ <dl><dt><a name="-project_geometry"><strong>project_geometry</strong></a>(geom_wkt: str, src_crs='EPSG:4326', target_crs='EPSG:32628')</dt><dd><span class="code">#&nbsp;Função&nbsp;para&nbsp;projetar&nbsp;geometria&nbsp;de&nbsp;WKT&nbsp;entre&nbsp;dois&nbsp;sistemas&nbsp;de&nbsp;coordenadas&nbsp;(ex:&nbsp;WGS84&nbsp;para&nbsp;UTM)</span></dd></dl>
+ <dl><dt>async <a name="-suggest_trades"><strong>suggest_trades</strong></a>(level: str = Query(PydanticUndefined), name: str = Query(PydanticUndefined), top: int = Query(5))</dt></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>Optional</strong> = typing.Optional<br>
+<strong>__warningregistry__</strong> = {'version': 52}<br>
+<strong>app</strong> = &lt;fastapi.applications.FastAPI object&gt;<br>
+<strong>df_properties</strong> = None<br>
+<strong>property_adjacency_list</strong> = defaultdict(&lt;class 'list'&gt;, {})</td></tr></table>
+</body></html>
