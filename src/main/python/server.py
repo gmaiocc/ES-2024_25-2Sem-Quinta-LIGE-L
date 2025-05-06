@@ -384,6 +384,44 @@ async def get_average_area_grouped(
     }
 
 
+# Definir as características a considerar para a similaridade (além da área)
+CARACTERISTICAS_SIMILARIDADE = ["Shape_Area", "Valor_Estimado", "Distancia_Vias", "Distancia_Urbana"]
+PESOS_SIMILARIDADE = {
+    "Shape_Area": 0.4,  # Peso para a área
+    "Valor_Estimado": 0.3, # Peso para o valor estimado
+    "Distancia_Vias": 0.15, # Peso para a distância a vias
+    "Distancia_Urbana": 0.15 # Peso para a distância a zonas urbanas
+}
+
+
+def calcular_similaridade(prop1, prop2, caracteristicas, pesos):
+    """Calcula um score de similaridade entre duas propriedades com base nas características e pesos fornecidos."""
+    score = 0
+    total_peso = 0
+
+    for carac in caracteristicas:
+        if carac in prop1 and carac in prop2 and pd.notna(prop1[carac]) and pd.notna(prop2[carac]) and carac in pesos:
+            peso = pesos[carac]
+            total_peso += peso
+            val1 = prop1[carac]
+            val2 = prop2[carac]
+
+            if isinstance(val1, (int, float)) and isinstance(val2, (int, float)):
+                # Normalizar a diferença (quanto menor a diferença, maior a similaridade)
+                max_val = max(abs(val1), abs(val2), 1) # Evitar divisão por zero
+                diff_normalizada = abs(val1 - val2) / max_val
+                similaridade_carac = 1 - diff_normalizada
+                score += peso * similaridade_carac
+            elif isinstance(val1, str) and isinstance(val2, str):
+                # Similaridade binária para strings (igual ou diferente)
+                if val1.lower() == val2.lower():
+                    score += peso * 1
+                else:
+                    score += peso * 0
+
+    return score / total_peso if total_peso > 0 else 0
+
+
 @app.get("/suggest_trades")
 async def suggest_trades(
     level: str = Query(..., regex="^(Freguesia|Concelho|Distrito)$"),
@@ -404,50 +442,61 @@ async def suggest_trades(
     if "Shape_Area" not in df.columns:
         raise HTTPException(500, "É necessária coluna Shape_Area.")
 
-    # agrupa por OWNER: lista de (OBJECTID, area)
-    owners = {
-        owner: list(g[["OBJECTID", "Shape_Area"]].itertuples(index=False, name=None))
+    # agrupa por OWNER: lista de dicts com OBJECTID e todas as características
+    owners_data = {
+        owner: g.to_dict('records')
         for owner, g in df.groupby("OWNER")
         if len(g) > 0
     }
-    if len(owners) < 2:
+    if len(owners_data) < 2:
         raise HTTPException(404, "Menos de dois proprietários para trocar.")
-
-    # pré-calcula somas e contagens
-    stats = {
-        owner: {"sum": sum(a for _, a in props), "count": len(props)}
-        for owner, props in owners.items()
-    }
 
     suggestions = []
     # para cada par de proprietários
-    for o1, o2 in combinations(owners, 2):
-        sum1, cnt1 = stats[o1]["sum"], stats[o1]["count"]
-        sum2, cnt2 = stats[o2]["sum"], stats[o2]["count"]
+    for o1, o2 in combinations(owners_data.keys(), 2):
+        props1 = owners_data[o1]
+        props2 = owners_data[o2]
         # cada possível troca de uma propriedade
-        for (id1, a1), (id2, a2) in product(owners[o1], owners[o2]):
-            new_avg1 = (sum1 - a1 + a2) / cnt1
-            new_avg2 = (sum2 - a2 + a1) / cnt2
-            delta = (new_avg1 - sum1 / cnt1) + (new_avg2 - sum2 / cnt2)
-            area_diff = abs(a1 - a2)
-            # potencial = ganho total dividido pela diferença de áreas (+1 para evitar div/zero)
-            potential = delta / (area_diff + 1e-6)
-            suggestions.append(
-                {
-                    "owner1": o1,
-                    "prop1": id1,
-                    "area1": a1,
-                    "owner2": o2,
-                    "prop2": id2,
-                    "area2": a2,
-                    "delta_avg_total": delta,
-                    "potential_score": potential,
-                }
-            )
+        for prop1 in props1:
+            for prop2 in props2:
+                id1 = prop1['OBJECTID']
+                a1 = prop1['Shape_Area']
+                id2 = prop2['OBJECTID']
+                a2 = prop2['Shape_Area']
+
+                # Calcular a área total atual para cada proprietário (agrupada)
+                sum1 = sum(p['Shape_Area'] for p in props1)
+                sum2 = sum(p['Shape_Area'] for p in props2)
+                cnt1 = len(props1)
+                cnt2 = len(props2)
+
+                # Calcular a área média após a troca
+                new_avg1 = (sum1 - a1 + a2) / cnt1 if cnt1 > 0 else 0
+                new_avg2 = (sum2 - a2 + a1) / cnt2 if cnt2 > 0 else 0
+                delta = (new_avg1 - sum1 / cnt1 if cnt1 > 0 else 0) + (new_avg2 - sum2 / cnt2 if cnt2 > 0 else 0)
+                area_diff = abs(a1 - a2)
+                potential_area = delta / (area_diff + 1e-6)
+
+                # Calcular a similaridade entre as propriedades
+                similaridade = calcular_similaridade(prop1, prop2, CARACTERISTICAS_SIMILARIDADE, PESOS_SIMILARIDADE)
+
+                # Combinar o potencial de área com a similaridade
+                potential_score = potential_area * (1 + similaridade) # Ajuste a fórmula conforme necessário
+
+                suggestions.append(
+                    {
+                        "owner1": o1,
+                        "prop1": id1,
+                        "area1": a1,
+                        "owner2": o2,
+                        "prop2": id2,
+                        "area2": a2,
+                        "delta_avg_total": delta,
+                        "potential_score": potential_score,
+                        "similaridade": similaridade, # Adicionado para possível visualização/debug
+                    }
+                )
 
     # ordena por potencial e devolve top N
     best = sorted(suggestions, key=lambda s: s["potential_score"], reverse=True)[:top]
     return {"level": level, "name": name, "suggestions": best}
-
-
-##new branch
