@@ -384,11 +384,13 @@ async def suggest_trades(
                 a1, a2 = p1["Shape_Area"], p2["Shape_Area"]
                 sum1, sum2 = len(owners[o1]), len(owners[o2])
                 # Cálculo de ganho de área média
-                new_avg_gain = (
-                    sum(p["Shape_Area"] for p in owners[o1]) - a1 + a2
-                ) / sum1 + (sum(p["Shape_Area"] for p in owners[o2]) - a2 + a1) / sum2
+                new_avg1 = (sum(p["Shape_Area"] for p in owners[o1]) - a1 + a2) / sum1
+                new_avg2 = (sum(p["Shape_Area"] for p in owners[o2]) - a2 + a1) / sum2
+                old_avg1 = sum(p["Shape_Area"] for p in owners[o1]) / sum1
+                old_avg2 = sum(p["Shape_Area"] for p in owners[o2]) / sum2
+                delta_avg_total = (new_avg1 + new_avg2) - (old_avg1 + old_avg2)
                 area_diff = abs(a1 - a2)
-                potencia = new_avg_gain / (area_diff + 1e-6)
+                potencia = delta_avg_total / (area_diff + 1e-6)
                 sim = calcular_similaridade(
                     p1, p2, CARACTERISTICAS_SIMILARIDADE, PESOS_SIMILARIDADE
                 )
@@ -397,10 +399,13 @@ async def suggest_trades(
                     {
                         "owner1": o1,
                         "prop1": p1["OBJECTID"],
+                        "area1": a1,
                         "owner2": o2,
                         "prop2": p2["OBJECTID"],
-                        "score": score,
+                        "area2": a2,
+                        "delta_avg_total": delta_avg_total,
+                        "potential_score": score,
                     }
                 )
-    best = sorted(suggestions, key=lambda x: x["score"], reverse=True)[:top]
+    best = sorted(suggestions, key=lambda x: x["potential_score"], reverse=True)[:top]
     return {"level": level, "name": name, "suggestions": best}
