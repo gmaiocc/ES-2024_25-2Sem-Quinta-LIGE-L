@@ -53,6 +53,7 @@ def parse_csv_data(csv_data: str):
     return None
 
 
+
 def project_geometry(geom_wkt: str, src_crs="EPSG:4326", target_crs="EPSG:32628"):
     """
     Projeta geometria WKT de um CRS fonte para um CRS alvo (ex: WGS84 -> UTM).
