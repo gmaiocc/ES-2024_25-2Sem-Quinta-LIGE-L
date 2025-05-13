@@ -32,3 +32,4 @@ gunicorn~=23.0.0
 six~=1.17.0
 annotated-types~=0.7.0
 httpx~=0.28.1
+radon~=5.2.0

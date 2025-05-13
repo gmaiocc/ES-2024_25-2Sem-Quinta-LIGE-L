@@ -1,12 +1,3 @@
-# Resumo:
-# Este módulo implementa uma API REST usando FastAPI para processar dados de propriedades geoespaciais.
-# Funcionalidades principais:
-# 1. Carregamento e parsing de CSVs com separadores variados.
-# 2. Projeção de geometrias WKT de WGS84 para UTM.
-# 3. Construção de grafos de adjacência espacial e de propriedade.
-# 4. Cálculo de área média simples e agrupada por proprietário.
-# 5. Geração de sugestões de trocas de propriedades com base em área média e similaridade de características.
-
 from functools import partial  # Para criar funções parciais na projeção de coordenadas
 from fastapi import (
     FastAPI,
