@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: module server</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title">server</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:/Users/miguelcarvalhal/Documents/UNI_3Ano/2nd_Sem/ES/Projeto-20250324/ES-2024_25-2Sem-Quinta-LIGE-L/src/main/python/server.py">/Users/miguelcarvalhal/Documents/UNI_3Ano/2nd_Sem/ES/Projeto-20250324/ES-2024_25-2Sem-Quinta-LIGE-L/src/main/python/server.py</a></td></tr></table>
+    <p><span class="code">#&nbsp;Resumo:<br>
+#&nbsp;Este&nbsp;módulo&nbsp;implementa&nbsp;uma&nbsp;API&nbsp;REST&nbsp;usando&nbsp;FastAPI&nbsp;para&nbsp;processar&nbsp;dados&nbsp;de&nbsp;propriedades&nbsp;geoespaciais.<br>
+#&nbsp;Funcionalidades&nbsp;principais:<br>
+#&nbsp;1.&nbsp;Carregamento&nbsp;e&nbsp;parsing&nbsp;de&nbsp;CSVs&nbsp;com&nbsp;separadores&nbsp;variados.<br>
+#&nbsp;2.&nbsp;Projeção&nbsp;de&nbsp;geometrias&nbsp;WKT&nbsp;de&nbsp;WGS84&nbsp;para&nbsp;UTM.<br>
+#&nbsp;3.&nbsp;Construção&nbsp;de&nbsp;grafos&nbsp;de&nbsp;adjacência&nbsp;espacial&nbsp;e&nbsp;de&nbsp;propriedade.<br>
+#&nbsp;4.&nbsp;Cálculo&nbsp;de&nbsp;área&nbsp;média&nbsp;simples&nbsp;e&nbsp;agrupada&nbsp;por&nbsp;proprietário.<br>
+#&nbsp;5.&nbsp;Geração&nbsp;de&nbsp;sugestões&nbsp;de&nbsp;trocas&nbsp;de&nbsp;propriedades&nbsp;com&nbsp;base&nbsp;em&nbsp;área&nbsp;média&nbsp;e&nbsp;similaridade&nbsp;de&nbsp;características.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="pandas.html">pandas</a><br>
+</td><td class="multicolumn"><a href="pyproj.html">pyproj</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-calcular_similaridade"><strong>calcular_similaridade</strong></a>(prop1, prop2, caracteristicas, pesos)</dt><dd><span class="code">Calcula&nbsp;similaridade&nbsp;entre&nbsp;duas&nbsp;propriedades&nbsp;com&nbsp;base&nbsp;em&nbsp;múltiplas&nbsp;características&nbsp;e&nbsp;pesos.</span></dd></dl>
+ <dl><dt><a name="-check_adjacency"><strong>check_adjacency</strong></a>(geom1, geom2)</dt><dd><span class="code">Verifica&nbsp;se&nbsp;duas&nbsp;geometrias&nbsp;são&nbsp;adjacentes&nbsp;(tocam&nbsp;ou&nbsp;intersectam).<br>
+Retorna&nbsp;True&nbsp;se&nbsp;adjacentes,&nbsp;False&nbsp;caso&nbsp;contrário.</span></dd></dl>
+ <dl><dt>async <a name="-get_average_area"><strong>get_average_area</strong></a>(
+    level: str = Query(PydanticUndefined),
+    name: str = Query(PydanticUndefined)
+)</dt><dd><span class="code">Retorna&nbsp;a&nbsp;área&nbsp;média&nbsp;(m²)&nbsp;das&nbsp;propriedades&nbsp;em&nbsp;uma&nbsp;área&nbsp;geográfica&nbsp;dada.</span></dd></dl>
+ <dl><dt>async <a name="-get_average_area_grouped"><strong>get_average_area_grouped</strong></a>(
+    level: str = Query(PydanticUndefined),
+    name: str = Query(PydanticUndefined)
+)</dt><dd><span class="code">Calcula&nbsp;a&nbsp;área&nbsp;média&nbsp;considerando&nbsp;propriedades&nbsp;adjacentes&nbsp;do&nbsp;mesmo&nbsp;proprietário&nbsp;como&nbsp;uma&nbsp;única&nbsp;unidade.</span></dd></dl>
+ <dl><dt>async <a name="-get_property_details"><strong>get_property_details</strong></a>(objectid: str)</dt><dd><span class="code">Retorna&nbsp;detalhes&nbsp;de&nbsp;uma&nbsp;propriedade&nbsp;pelo&nbsp;OBJECTID,<br>
+incluindo&nbsp;proprietário,&nbsp;freguesia&nbsp;e&nbsp;IDs&nbsp;de&nbsp;propriedades&nbsp;adjacentes.</span></dd></dl>
+ <dl><dt><a name="-parse_csv_data"><strong>parse_csv_data</strong></a>(csv_data: str)</dt><dd><span class="code">Tenta&nbsp;ler&nbsp;um&nbsp;CSV&nbsp;com&nbsp;diferentes&nbsp;separadores&nbsp;(";",&nbsp;",",&nbsp;"&nbsp;&nbsp;&nbsp;&nbsp;").<br>
+Retorna&nbsp;DataFrame&nbsp;se&nbsp;sucesso&nbsp;ou&nbsp;None&nbsp;caso&nbsp;falhe.</span></dd></dl>
+ <dl><dt>async <a name="-process_owners_graph"><strong>process_owners_graph</strong></a>(data: dict, limit: Optional[int] = Query(None))</dt><dd><span class="code">Constrói&nbsp;grafo&nbsp;ligando&nbsp;propriedades&nbsp;pelo&nbsp;mesmo&nbsp;OWNER.<br>
+Cada&nbsp;nó&nbsp;é&nbsp;uma&nbsp;parcela,&nbsp;arestas&nbsp;ligam&nbsp;parcelas&nbsp;de&nbsp;mesmo&nbsp;dono.</span></dd></dl>
+ <dl><dt>async <a name="-process_properties_graph"><strong>process_properties_graph</strong></a>(data: dict, limit: Optional[int] = Query(None))</dt><dd><span class="code">Constrói&nbsp;grafo&nbsp;de&nbsp;adjacência&nbsp;espacial&nbsp;entre&nbsp;propriedades.<br>
+Recebe&nbsp;CSV,&nbsp;parseia,&nbsp;projeta&nbsp;geometrias&nbsp;e&nbsp;gera&nbsp;nós&nbsp;e&nbsp;arestas.</span></dd></dl>
+ <dl><dt><a name="-project_geometry"><strong>project_geometry</strong></a>(geom_wkt: str, src_crs='EPSG:4326', target_crs='EPSG:32628')</dt><dd><span class="code">Projeta&nbsp;geometria&nbsp;WKT&nbsp;de&nbsp;um&nbsp;CRS&nbsp;fonte&nbsp;para&nbsp;um&nbsp;CRS&nbsp;alvo&nbsp;(ex:&nbsp;WGS84&nbsp;-&gt;&nbsp;UTM).<br>
+Retorna&nbsp;objeto&nbsp;Shapely&nbsp;transformado&nbsp;ou&nbsp;None&nbsp;em&nbsp;caso&nbsp;de&nbsp;erro.</span></dd></dl>
+ <dl><dt>async <a name="-suggest_trades"><strong>suggest_trades</strong></a>(
+    level: str = Query(PydanticUndefined),
+    name: str = Query(PydanticUndefined),
+    top: int = Query(5)
+)</dt><dd><span class="code">Gera&nbsp;as&nbsp;melhores&nbsp;sugestões&nbsp;de&nbsp;trocas&nbsp;entre&nbsp;propriedades&nbsp;para&nbsp;maximizar&nbsp;área&nbsp;média&nbsp;e&nbsp;similaridade.</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>CARACTERISTICAS_SIMILARIDADE</strong> = ['Shape_Area', 'Valor_Estimado', 'Distancia_Vias', 'Distancia_Urbana']<br>
+<strong>Optional</strong> = typing.Optional<br>
+<strong>PESOS_SIMILARIDADE</strong> = {'Distancia_Urbana': 0.15, 'Distancia_Vias': 0.15, 'Shape_Area': 0.4, 'Valor_Estimado': 0.3}<br>
+<strong>__warningregistry__</strong> = {'version': 54}<br>
+<strong>app</strong> = &lt;fastapi.applications.FastAPI object&gt;<br>
+<strong>df_properties</strong> = None<br>
+<strong>property_adjacency_list</strong> = defaultdict(&lt;class 'list'&gt;, {})</td></tr></table>
+</body></html>

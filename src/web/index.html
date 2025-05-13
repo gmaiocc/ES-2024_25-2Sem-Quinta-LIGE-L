@@ -2,17 +2,14 @@
 <html lang="pt">
 
 <head>
-    <meta charset="UTF-8"> <!-- Define o conjunto de caracteres como UTF-8 -->
+    <meta charset="UTF-8"> 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Torna a página responsiva para dispositivos móveis -->
     <title>Visualização de Cadastro de Propriedades e Proprietários</title>
-    <!-- Título da página apresentado no separador do navegador -->
-
-    <link rel="stylesheet" href="style.css"> <!-- Liga o ficheiro CSS externo para estilos -->
+    <link rel="stylesheet" href="style.css"> 
 </head>
 
 <body>
-    <h1>ES-2024_25-2Sem-Quinta-LIGE-L</h1> <!-- Título principal da página -->
+    <h1>ES-2024_25-2Sem-Quinta-LIGE-L</h1> 
 
     <div class="controls">
         <!-- Campo para carregar um ficheiro CSV -->
@@ -21,16 +18,20 @@
         <button onclick="processPropertiesGraph()">Criar Grafo de Propriedades</button>
         <!-- Botão para gerar o grafo de proprietários (baseado na partilha de propriedades) -->
         <button onclick="processOwnersGraph()">Criar Grafo de Proprietários</button>
+    </div>
+    <div>
         <select id="areaLevel">
             <option value="Freguesia">Freguesia</option>
             <option value="Concelho">Concelho</option>
             <option value="Distrito">Distrito</option>
         </select>
-        <input type="text" id="areaName" placeholder="Nome (ex: Lisboa)">
+        <input type="text" id="areaName" placeholder="Nome (ex: Arco da Calheta)">
+        <!-- Botão para calcular a area média das propriedades (Freguesia, Concelho ou Distrito) -->
         <button onclick="getAverageArea()">Área Média</button>
+        <!-- Botão para calcular a area média agrupada de um proprietário (Todas as suas propriedades como se fossem uma) -->
         <button onclick="getAverageAreaGrouped()">Área Média Agrupada</button>
-         <!-- NOVA FEATURE 6 -->
-         <input type="number" id="topN" placeholder="Top N sugestões" min="1" value="5">
+        <input type="number" id="topN" placeholder="Top N sugestões" min="1" value="5">
+        <!-- Botão para sugerir trocas entre proprietarios -->
          <button onclick="getSuggestedTrades()">Sugestões de Trocas</button>
     </div>
 
@@ -38,6 +39,7 @@
     <div class="container">
         <!-- Div onde será renderizado o grafo das propriedades -->
         <div id="propertiesNetwork"></div>
+        <div>
         <!-- Div onde serão mostrados os detalhes de uma propriedade selecionada -->
         <div id="propertyInfo">
             <h3>Detalhes da Propriedade</h3>
@@ -54,6 +56,7 @@
             <h3>Sugestões de Trocas</h3>
             <p>Utilize os controles acima para gerar sugestões.</p>
         </div>
+    </div>
     </div>
 
     <h2>Grafo de Proprietários (Arestas por Propriedade Partilhada)</h2>
@@ -190,7 +193,7 @@ function getSuggestedTrades() {
             console.error(err);
             alert('Erro ao obter sugestões de trocas.');
         });
-}
+    }
         // Função para processar o ficheiro CSV e gerar o grafo de propriedades
         function processPropertiesGraph() {
             const fileInput = document.getElementById('fileInput');
@@ -226,6 +229,7 @@ function getSuggestedTrades() {
 
             reader.readAsText(file); // Lê o conteúdo do ficheiro como texto
         }
+
         function getAverageArea() {
             const level = document.getElementById('areaLevel').value;
             const name = document.getElementById('areaName').value.trim();
@@ -305,10 +309,8 @@ function getSuggestedTrades() {
                         alert("Erro ao comunicar com o servidor para o grafo de proprietários.");
                     });
             };
-
             reader.readAsText(file); // Lê o conteúdo do ficheiro como texto
         }
     </script>
 </body>
-
 </html>
