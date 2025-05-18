@@ -191,3 +191,4 @@ def test_nonexistent_area():
     assert "detail" in json_response
     assert json_response["detail"] == "Nenhuma propriedade encontrada para Freguesia='Inexistente'."
 
+
