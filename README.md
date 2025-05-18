@@ -20,6 +20,7 @@ Usa `<input type="file">` com `FileReader` para ler e enviar o CSV para os endpo
 ---
 ## 2. Grafo de Propriedades (adjacência geométrica)
 
+
 **Backend:**  
 Converte cada WKT em objeto Shapely e reprojeta para UTM.  
 Para cada par de polígonos, testa `touches`/`intersects`.  
@@ -126,5 +127,5 @@ potential_score = ganho_area * (1 + similaridade)
 Ou seja, quanto mais parecidas as propriedades, maior o score e a chance de sugestão.
 
 **Front-end:**  
-A lista de sugestões exibe também o índice de similaridade entre as parcelas.  
+A lista de sugestões mostra também o índice de similaridade entre as parcelas.  
 Nada muda na interação do usuário, apenas o critério interno se torna mais robusto e realista.
